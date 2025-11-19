@@ -1,0 +1,176 @@
+---
+# PostgreSQL for Orders
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-orders-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-orders
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-orders
+  template:
+    metadata:
+      labels:
+        app: postgres-orders
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: orders_db
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-orders-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-orders
+spec:
+  selector:
+    app: postgres-orders
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+
+---
+# PostgreSQL for Shipments
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-shipments-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-shipments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-shipments
+  template:
+    metadata:
+      labels:
+        app: postgres-shipments
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: shipments_db
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-shipments-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-shipments
+spec:
+  selector:
+    app: postgres-shipments
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+
+---
+# PostgreSQL for Inventory
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-inventory-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-inventory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-inventory
+  template:
+    metadata:
+      labels:
+        app: postgres-inventory
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: inventory_db
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-inventory-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-inventory
+spec:
+  selector:
+    app: postgres-inventory
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None

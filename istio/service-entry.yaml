@@ -1,0 +1,24 @@
+# ServiceEntry for external services if needed
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-email-service
+spec:
+  hosts:
+  - smtp.gmail.com
+  ports:
+  - number: 587
+    name: smtp
+    protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# PeerAuthentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: default
+spec:
+  mtls:
+    mode: PERMISSIVE

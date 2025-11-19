@@ -1,0 +1,140 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: api-gateway-vs
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - logistics-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api/v1
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: api-gateway
+        port:
+          number: 8000
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: order-service-vs
+spec:
+  hosts:
+  - order-service
+  http:
+  - route:
+    - destination:
+        host: order-service
+        subset: v1
+        port:
+          number: 8080
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: shipment-service-vs
+spec:
+  hosts:
+  - shipment-service
+  http:
+  - route:
+    - destination:
+        host: shipment-service
+        subset: v1
+        port:
+          number: 8081
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: inventory-service-vs
+spec:
+  hosts:
+  - inventory-service
+  http:
+  - route:
+    - destination:
+        host: inventory-service
+        subset: v1
+        port:
+          number: 8082
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: route-service-vs
+spec:
+  hosts:
+  - route-service
+  http:
+  - route:
+    - destination:
+        host: route-service
+        subset: v1
+        port:
+          number: 8083
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: driver-service-vs
+spec:
+  hosts:
+  - driver-service
+  http:
+  - route:
+    - destination:
+        host: driver-service
+        subset: v1
+        port:
+          number: 8084
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: notification-service-vs
+spec:
+  hosts:
+  - notification-service
+  http:
+  - route:
+    - destination:
+        host: notification-service
+        subset: v1
+        port:
+          number: 8085
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s

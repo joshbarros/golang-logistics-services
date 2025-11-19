@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package shipment;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/services/shipment-service/proto";
+
+import "proto/common/common.proto";
+
+service ShipmentService {
+  rpc CreateShipment(CreateShipmentRequest) returns (ShipmentResponse);
+  rpc GetShipment(GetShipmentRequest) returns (ShipmentResponse);
+  rpc TrackShipment(TrackShipmentRequest) returns (ShipmentResponse);
+  rpc UpdateShipmentStatus(UpdateShipmentStatusRequest) returns (ShipmentResponse);
+  rpc ListShipments(ListShipmentsRequest) returns (ListShipmentsResponse);
+}
+
+enum ShipmentStatus {
+  SHIPMENT_STATUS_UNSPECIFIED = 0;
+  SHIPMENT_STATUS_PENDING = 1;
+  SHIPMENT_STATUS_PICKED_UP = 2;
+  SHIPMENT_STATUS_IN_TRANSIT = 3;
+  SHIPMENT_STATUS_OUT_FOR_DELIVERY = 4;
+  SHIPMENT_STATUS_DELIVERED = 5;
+  SHIPMENT_STATUS_FAILED = 6;
+  SHIPMENT_STATUS_RETURNED = 7;
+}
+
+message Shipment {
+  string id = 1;
+  string order_id = 2;
+  string tracking_number = 3;
+  string carrier = 4;
+  common.Address origin = 5;
+  common.Address destination = 6;
+  ShipmentStatus status = 7;
+  repeated TrackingEvent events = 8;
+  string driver_id = 9;
+  int64 estimated_delivery = 10;
+  int64 actual_delivery = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
+}
+
+message TrackingEvent {
+  string id = 1;
+  string location = 2;
+  string description = 3;
+  ShipmentStatus status = 4;
+  int64 timestamp = 5;
+}
+
+message CreateShipmentRequest {
+  string order_id = 1;
+  string carrier = 2;
+  common.Address origin = 3;
+  common.Address destination = 4;
+}
+
+message GetShipmentRequest {
+  string id = 1;
+}
+
+message TrackShipmentRequest {
+  string tracking_number = 1;
+}
+
+message UpdateShipmentStatusRequest {
+  string id = 1;
+  ShipmentStatus status = 2;
+  string location = 3;
+  string description = 4;
+}
+
+message ListShipmentsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string order_id = 3;
+  ShipmentStatus status = 4;
+}
+
+message ListShipmentsResponse {
+  repeated Shipment shipments = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ShipmentResponse {
+  Shipment shipment = 1;
+  string message = 2;
+}
