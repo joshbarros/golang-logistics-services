@@ -19,8 +19,28 @@ build: ## Build all services
 
 test: ## Run tests for all services
 	@echo "Running tests..."
-	@go test ./...
-	@echo "✅ Tests passed!"
+	@./test-all.sh
+
+test-verbose: ## Run tests with verbose output
+	@echo "Running tests (verbose)..."
+	@cd services/order-service && go test -v ./...
+	@cd services/shipment-service && go test -v ./...
+	@cd services/inventory-service && go test -v ./...
+	@cd services/route-service && go test -v ./...
+	@cd services/driver-service && go test -v ./...
+	@cd services/notification-service && go test -v ./...
+	@cd services/api-gateway && go test -v ./...
+
+test-coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	@cd services/order-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/shipment-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/inventory-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/route-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/driver-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/notification-service && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@cd services/api-gateway && go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Coverage reports generated (coverage.html in each service directory)"
 
 clean: ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
