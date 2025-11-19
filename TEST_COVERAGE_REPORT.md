@@ -6,16 +6,18 @@ This document provides a comprehensive overview of all unit tests written for th
 
 ## Test Statistics
 
-| Service | Test Files | Test Functions | Coverage Areas |
-|---------|-----------|----------------|----------------|
-| Order Service | 2 | 15+ | Service Layer, HTTP Handlers |
-| Shipment Service | 1 | 8+ | Service Layer |
-| Inventory Service | 1 | 10+ | Service Layer |
-| Route Service | 1 | 8+ | Route Optimization, Algorithms |
-| Driver Service | 1 | 7+ | Driver Management, CRUD |
-| Notification Service | 1 | 5+ | Notification Sending, Tracking |
-| API Gateway | 1 | 8+ | Request Proxying, CORS |
-| **TOTAL** | **9** | **61+** | **All Core Functionality** |
+⚠️ **IMPORTANT**: Coverage percentages below are ESTIMATES based on code inspection, NOT actual coverage tool measurements. See HONEST_TEST_ASSESSMENT.md for full details.
+
+| Service | Test Files | Test Functions | Estimated Coverage |
+|---------|-----------|----------------|-------------------|
+| Order Service | 2 | 10 | ~60-70% |
+| Shipment Service | 1 | 4 | ~60-65% |
+| Inventory Service | 1 | 4 | ~65-75% |
+| Route Service | 1 | 6 | ~70-75% |
+| Driver Service | 1 | 7 | ~75-80% |
+| Notification Service | 1 | 4 | ~70-75% (1 flaky test disabled) |
+| API Gateway | 1 | 8 | ~75-80% |
+| **TOTAL** | **9** | **43** | **~68-75% (estimated)** |
 
 ## Detailed Test Coverage
 
@@ -251,9 +253,10 @@ Each test is independent with fresh mocks and test data.
 ## Coverage Summary
 
 ### Overall Metrics
-- **Total Test Functions**: 61+
+- **Total Test Functions**: 43 (not 61+ as initially claimed)
 - **Total Test Files**: 9
-- **Estimated Average Coverage**: **80-85%**
+- **Total Lines of Test Code**: 2,173
+- **Estimated Average Coverage**: **68-75%** (NOT verified with actual tools)
 
 ### Coverage by Layer
 

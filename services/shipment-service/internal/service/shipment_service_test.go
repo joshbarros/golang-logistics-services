@@ -8,12 +8,12 @@ import (
 )
 
 type MockShipmentRepository struct {
-	createFunc               func(*models.Shipment) error
-	getByIDFunc              func(string) (*models.Shipment, error)
-	getByTrackingNumberFunc  func(string) (*models.Shipment, error)
-	listFunc                 func(int, int, string, string) ([]models.Shipment, int64, error)
-	updateFunc               func(*models.Shipment) error
-	addTrackingEventFunc     func(*models.TrackingEvent) error
+	createFunc              func(*models.Shipment) error
+	getByIDFunc             func(string) (*models.Shipment, error)
+	getByTrackingNumberFunc func(string) (*models.Shipment, error)
+	listFunc                func(int, int, string, string) ([]models.Shipment, int64, error)
+	updateFunc              func(*models.Shipment) error
+	addTrackingEventFunc    func(*models.TrackingEvent) error
 }
 
 func (m *MockShipmentRepository) Create(shipment *models.Shipment) error {
@@ -60,11 +60,11 @@ func (m *MockShipmentRepository) AddTrackingEvent(event *models.TrackingEvent) e
 
 func TestCreateShipment(t *testing.T) {
 	tests := []struct {
-		name        string
-		orderID     string
-		carrier     string
-		mockCreate  func(*models.Shipment) error
-		wantErr     bool
+		name       string
+		orderID    string
+		carrier    string
+		mockCreate func(*models.Shipment) error
+		wantErr    bool
 	}{
 		{
 			name:    "successful creation",
@@ -171,14 +171,14 @@ func TestTrackShipment(t *testing.T) {
 
 func TestUpdateShipmentStatus(t *testing.T) {
 	tests := []struct {
-		name              string
-		shipmentID        string
-		status            string
-		mockGetByID       func(string) (*models.Shipment, error)
-		mockAddEvent      func(*models.TrackingEvent) error
-		mockUpdate        func(*models.Shipment) error
-		wantDeliveryTime  bool
-		wantErr           bool
+		name             string
+		shipmentID       string
+		status           string
+		mockGetByID      func(string) (*models.Shipment, error)
+		mockAddEvent     func(*models.TrackingEvent) error
+		mockUpdate       func(*models.Shipment) error
+		wantDeliveryTime bool
+		wantErr          bool
 	}{
 		{
 			name:       "update to in transit",
