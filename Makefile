@@ -1,4 +1,4 @@
-.PHONY: help build run test clean docker-build k8s-deploy k8s-delete tilt-up tilt-down
+.PHONY: help build run test clean docker-build k8s-deploy k8s-delete tilt-up tilt-down proto-gen proto-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -6,7 +6,17 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build all services
+proto-gen: ## Generate Go code from protocol buffers
+	@echo "Generating gRPC code from proto files..."
+	@./scripts/generate-proto.sh
+
+proto-clean: ## Clean generated proto files
+	@echo "Cleaning generated proto files..."
+	@find proto -name "*.pb.go" -delete
+	@find proto -name "*_grpc.pb.go" -delete
+	@echo "✅ Proto files cleaned!"
+
+build: proto-gen ## Build all services
 	@echo "Building all services..."
 	@cd services/order-service && go build -o ../../bin/order-service ./cmd/main.go
 	@cd services/shipment-service && go build -o ../../bin/shipment-service ./cmd/main.go

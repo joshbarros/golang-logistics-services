@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package notification.v1;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/proto/notification/v1;notificationv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Notification Service - handles sending notifications via email, SMS, push
+service NotificationService {
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+  rpc SendBulkNotifications(SendBulkNotificationsRequest) returns (SendBulkNotificationsResponse);
+}
+
+message Notification {
+  string id = 1;
+  string recipient = 2;
+  string type = 3; // EMAIL, SMS, PUSH
+  string subject = 4;
+  string message = 5;
+  string status = 6; // PENDING, SENT, FAILED
+  string error_message = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp sent_at = 9;
+}
+
+message SendNotificationRequest {
+  string recipient = 1;
+  string type = 2;
+  string subject = 3;
+  string message = 4;
+  map<string, string> metadata = 5;
+}
+
+message SendNotificationResponse {
+  Notification notification = 1;
+}
+
+message GetNotificationRequest {
+  string id = 1;
+}
+
+message GetNotificationResponse {
+  Notification notification = 1;
+}
+
+message ListNotificationsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string recipient = 3;
+  string type = 4;
+  string status = 5;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message SendBulkNotificationsRequest {
+  repeated SendNotificationRequest notifications = 1;
+}
+
+message SendBulkNotificationsResponse {
+  repeated Notification notifications = 1;
+  int32 success_count = 2;
+  int32 failure_count = 3;
+}

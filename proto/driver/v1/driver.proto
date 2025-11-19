@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package driver.v1;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/proto/driver/v1;driverv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Driver Service - handles driver management and assignment
+service DriverService {
+  rpc CreateDriver(CreateDriverRequest) returns (CreateDriverResponse);
+  rpc GetDriver(GetDriverRequest) returns (GetDriverResponse);
+  rpc ListDrivers(ListDriversRequest) returns (ListDriversResponse);
+  rpc UpdateDriver(UpdateDriverRequest) returns (UpdateDriverResponse);
+  rpc AssignDriver(AssignDriverRequest) returns (AssignDriverResponse);
+  rpc GetAvailableDrivers(GetAvailableDriversRequest) returns (GetAvailableDriversResponse);
+  rpc UpdateDriverLocation(UpdateDriverLocationRequest) returns (UpdateDriverLocationResponse);
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message Driver {
+  string id = 1;
+  string name = 2;
+  string phone = 3;
+  string email = 4;
+  string license_number = 5;
+  string vehicle_type = 6;
+  string vehicle_plate = 7;
+  string status = 8; // AVAILABLE, ASSIGNED, DELIVERING, OFF_DUTY
+  Location current_location = 9;
+  string current_route_id = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message CreateDriverRequest {
+  string name = 1;
+  string phone = 2;
+  string email = 3;
+  string license_number = 4;
+  string vehicle_type = 5;
+  string vehicle_plate = 6;
+}
+
+message CreateDriverResponse {
+  Driver driver = 1;
+}
+
+message GetDriverRequest {
+  string id = 1;
+}
+
+message GetDriverResponse {
+  Driver driver = 1;
+}
+
+message ListDriversRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string status = 3;
+}
+
+message ListDriversResponse {
+  repeated Driver drivers = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateDriverRequest {
+  string id = 1;
+  string name = 2;
+  string phone = 3;
+  string email = 4;
+  string status = 5;
+}
+
+message UpdateDriverResponse {
+  Driver driver = 1;
+}
+
+message AssignDriverRequest {
+  string driver_id = 1;
+  string route_id = 2;
+}
+
+message AssignDriverResponse {
+  Driver driver = 1;
+}
+
+message GetAvailableDriversRequest {
+  double latitude = 1;
+  double longitude = 2;
+  double radius_km = 3;
+}
+
+message GetAvailableDriversResponse {
+  repeated Driver drivers = 1;
+}
+
+message UpdateDriverLocationRequest {
+  string driver_id = 1;
+  Location location = 2;
+}
+
+message UpdateDriverLocationResponse {
+  Driver driver = 1;
+}

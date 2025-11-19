@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package order.v1;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/proto/order/v1;orderv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Order Service - handles order management
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+}
+
+message Address {
+  string street = 1;
+  string city = 2;
+  string state = 3;
+  string postal_code = 4;
+  string country = 5;
+}
+
+message OrderItem {
+  string id = 1;
+  string order_id = 2;
+  string product_id = 3;
+  string product_name = 4;
+  int32 quantity = 5;
+  double unit_price = 6;
+  double total_price = 7;
+}
+
+message Order {
+  string id = 1;
+  string customer_id = 2;
+  string customer_name = 3;
+  string customer_email = 4;
+  Address shipping_address = 5;
+  Address billing_address = 6;
+  repeated OrderItem items = 7;
+  double total_amount = 8;
+  string status = 9;
+  string tracking_number = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message CreateOrderRequest {
+  string customer_id = 1;
+  string customer_name = 2;
+  string customer_email = 3;
+  Address shipping_address = 4;
+  Address billing_address = 5;
+  repeated OrderItem items = 6;
+}
+
+message CreateOrderResponse {
+  Order order = 1;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}
+
+message ListOrdersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string customer_id = 3;
+  string status = 4;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateOrderStatusRequest {
+  string id = 1;
+  string status = 2;
+}
+
+message UpdateOrderStatusResponse {
+  Order order = 1;
+}
+
+message CancelOrderRequest {
+  string id = 1;
+}
+
+message CancelOrderResponse {
+  Order order = 1;
+}

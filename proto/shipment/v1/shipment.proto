@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package shipment.v1;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/proto/shipment/v1;shipmentv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Shipment Service - handles shipment tracking and logistics
+service ShipmentService {
+  rpc CreateShipment(CreateShipmentRequest) returns (CreateShipmentResponse);
+  rpc GetShipment(GetShipmentRequest) returns (GetShipmentResponse);
+  rpc TrackShipment(TrackShipmentRequest) returns (TrackShipmentResponse);
+  rpc UpdateShipmentStatus(UpdateShipmentStatusRequest) returns (UpdateShipmentStatusResponse);
+  rpc ListShipments(ListShipmentsRequest) returns (ListShipmentsResponse);
+}
+
+message TrackingEvent {
+  string id = 1;
+  string shipment_id = 2;
+  string status = 3;
+  string location = 4;
+  string description = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+message Shipment {
+  string id = 1;
+  string order_id = 2;
+  string tracking_number = 3;
+  string carrier = 4;
+  string status = 5;
+  string origin = 6;
+  string destination = 7;
+  google.protobuf.Timestamp estimated_delivery = 8;
+  google.protobuf.Timestamp actual_delivery = 9;
+  repeated TrackingEvent events = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message CreateShipmentRequest {
+  string order_id = 1;
+  string carrier = 2;
+  string origin = 3;
+  string destination = 4;
+  google.protobuf.Timestamp estimated_delivery = 5;
+}
+
+message CreateShipmentResponse {
+  Shipment shipment = 1;
+}
+
+message GetShipmentRequest {
+  string id = 1;
+}
+
+message GetShipmentResponse {
+  Shipment shipment = 1;
+}
+
+message TrackShipmentRequest {
+  string tracking_number = 1;
+}
+
+message TrackShipmentResponse {
+  Shipment shipment = 1;
+}
+
+message UpdateShipmentStatusRequest {
+  string id = 1;
+  string status = 2;
+  string location = 3;
+  string description = 4;
+}
+
+message UpdateShipmentStatusResponse {
+  Shipment shipment = 1;
+}
+
+message ListShipmentsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string order_id = 3;
+  string status = 4;
+}
+
+message ListShipmentsResponse {
+  repeated Shipment shipments = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

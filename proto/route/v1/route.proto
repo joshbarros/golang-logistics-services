@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package route.v1;
+
+option go_package = "github.com/joshbarros/golang-logistics-services/proto/route/v1;routev1";
+
+import "google/protobuf/timestamp.proto";
+
+// Route Service - handles route planning and optimization
+service RouteService {
+  rpc OptimizeRoute(OptimizeRouteRequest) returns (OptimizeRouteResponse);
+  rpc GetRoute(GetRouteRequest) returns (GetRouteResponse);
+  rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);
+  rpc CalculateDistance(CalculateDistanceRequest) returns (CalculateDistanceResponse);
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  string address = 3;
+  string name = 4;
+}
+
+message Waypoint {
+  string id = 1;
+  Location location = 2;
+  int32 sequence = 3;
+  string shipment_id = 4;
+  google.protobuf.Timestamp estimated_arrival = 5;
+}
+
+message Route {
+  string id = 1;
+  string driver_id = 2;
+  Location start_location = 3;
+  Location end_location = 4;
+  repeated Waypoint waypoints = 5;
+  double total_distance = 6;
+  int32 estimated_duration_minutes = 7;
+  string status = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message OptimizeRouteRequest {
+  Location start_location = 1;
+  Location end_location = 2;
+  repeated Location waypoints = 3;
+  string optimization_criteria = 4; // distance, time, fuel
+}
+
+message OptimizeRouteResponse {
+  Route route = 1;
+  repeated int32 waypoint_order = 2;
+}
+
+message GetRouteRequest {
+  string id = 1;
+}
+
+message GetRouteResponse {
+  Route route = 1;
+}
+
+message ListRoutesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string driver_id = 3;
+  string status = 4;
+}
+
+message ListRoutesResponse {
+  repeated Route routes = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message CalculateDistanceRequest {
+  Location from = 1;
+  Location to = 2;
+}
+
+message CalculateDistanceResponse {
+  double distance_km = 1;
+  int32 estimated_duration_minutes = 2;
+}
