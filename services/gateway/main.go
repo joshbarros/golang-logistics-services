@@ -6,14 +6,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"golang-logistics-services/pkg/circuitbreaker"
 	"golang-logistics-services/pkg/graphql"
 	"golang-logistics-services/pkg/metrics"
+	"golang-logistics-services/pkg/shutdown"
 	"golang-logistics-services/pkg/tracing"
 )
 
@@ -244,30 +244,56 @@ func main() {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	// Graceful shutdown
+	// Initialize graceful shutdown manager
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	shutdownMgr := shutdown.NewManager(shutdown.Config{
+		Logger:          logger,
+		ShutdownTimeout: 30 * time.Second,
+	})
+
+	// Register components for graceful shutdown (priority-based)
+	// Priority 10: HTTP server (stop accepting new requests first)
+	shutdownMgr.RegisterHTTPServer("gateway-http", srv)
+
+	// Priority 15: Metrics manager (allow final metrics collection)
+	shutdownMgr.Register("metrics", 15, func(ctx context.Context) error {
+		log.Println("Closing metrics manager...")
+		return metricsManager.Close()
+	})
+
+	// Priority 20: Tracing manager (flush remaining traces)
+	shutdownMgr.Register("tracing", 20, func(ctx context.Context) error {
+		log.Println("Closing tracing manager...")
+		return tracingManager.Close()
+	})
+
+	// Priority 25: Circuit breaker manager (cleanup)
+	shutdownMgr.Register("circuit-breakers", 25, func(ctx context.Context) error {
+		log.Println("Shutting down circuit breakers...")
+		// Circuit breakers cleanup if needed
+		return nil
+	})
+
+	// Start server in background
 	go func() {
 		log.Printf("Starting Gateway API on port %s", config.Port)
+		log.Printf("GraphQL endpoint: http://localhost:%s/graphql", config.Port)
+		log.Printf("Health endpoint: http://localhost:%s/health", config.Port)
+		log.Printf("Metrics endpoint: http://localhost:%s/metrics", config.Port)
+
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+	// Wait for shutdown signal and execute graceful shutdown
+	if err := shutdownMgr.Wait(); err != nil {
+		log.Fatalf("Shutdown error: %v", err)
 	}
 
-	log.Println("Server exited")
+	log.Println("Gateway API exited gracefully")
 }
 
 // Example GraphQL queries:

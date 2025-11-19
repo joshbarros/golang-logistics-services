@@ -4,8 +4,15 @@ metadata:
   name: order-service
   labels:
     app: order-service
+    component: backend
+    tier: application
 spec:
-  replicas: 2
+  replicas: 3  # Increased from 2 for high availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Add 1 extra pod during updates
+      maxUnavailable: 0  # Never have fewer than desired replicas
   selector:
     matchLabels:
       app: order-service
@@ -14,43 +21,153 @@ spec:
       labels:
         app: order-service
         version: v1
+        component: backend
+        tier: application
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
+      # Security context for pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Graceful shutdown support
+      terminationGracePeriodSeconds: 35  # Must be > shutdown timeout (30s) + preStop sleep (5s)
+
       containers:
       - name: order-service
         image: order-service:latest
         imagePullPolicy: IfNotPresent
+
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+
         ports:
         - containerPort: 8080
           name: http
+          protocol: TCP
         - containerPort: 9090
           name: grpc
+          protocol: TCP
+
         env:
         - name: HTTP_PORT
           value: "8080"
         - name: GRPC_PORT
           value: "9090"
+        - name: LOG_LEVEL
+          value: "info"
         - name: DB_HOST
           value: "postgres-orders"
         - name: DB_PORT
           value: "5432"
         - name: DB_USER
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: order-service-secrets
+              key: db-user
         - name: DB_PASSWORD
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: order-service-secrets
+              key: db-password
         - name: DB_NAME
           value: "orders_db"
+        - name: JAEGER_ENDPOINT
+          value: "http://jaeger-collector:14268/api/traces"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+
+        # Resource limits and requests (CRITICAL for production)
+        resources:
+          requests:
+            cpu: 100m      # 0.1 CPU cores
+            memory: 128Mi  # 128 MB
+          limits:
+            cpu: 1000m     # 1 CPU core
+            memory: 512Mi  # 512 MB
+
+        # Startup probe (for slow-starting containers)
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30  # 30 * 5s = 150s max startup time
+
+        # Liveness probe (restart if unhealthy)
         livenessProbe:
           httpGet:
-            path: /health
+            path: /live
             port: 8080
+            scheme: HTTP
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Readiness probe (remove from load balancer if not ready)
         readinessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: 8080
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 2
+
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              # Sleep 5s to allow load balancer to remove pod from rotation
+              command: ["/bin/sh", "-c", "sleep 5"]
+
+        # Volume mounts for writable directories (needed with readOnlyRootFilesystem)
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+
+      # Affinity rules (spread pods across nodes)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: order-service
+              topologyKey: kubernetes.io/hostname
 ---
 apiVersion: v1
 kind: Service
@@ -58,8 +175,10 @@ metadata:
   name: order-service
   labels:
     app: order-service
+    component: backend
 spec:
   type: ClusterIP
+  sessionAffinity: None
   ports:
   - port: 8080
     targetPort: 8080
@@ -71,3 +190,61 @@ spec:
     name: grpc
   selector:
     app: order-service
+---
+# PodDisruptionBudget ensures minimum availability during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-service-pdb
+  labels:
+    app: order-service
+spec:
+  minAvailable: 2  # At least 2 pods must be available
+  selector:
+    matchLabels:
+      app: order-service
+---
+# HorizontalPodAutoscaler for automatic scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-service-hpa
+  labels:
+    app: order-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when CPU > 70%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale when Memory > 80%
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+      policies:
+      - type: Percent
+        value: 50  # Scale down max 50% of pods
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately
+      policies:
+      - type: Percent
+        value: 100  # Can double pod count
+        periodSeconds: 15
+      - type: Pods
+        value: 2  # Or add 2 pods
+        periodSeconds: 15
+      selectPolicy: Max  # Use the policy that scales up the most

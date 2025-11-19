@@ -1,0 +1,454 @@
+# Prometheus Alerting Rules for Logistics Platform
+# Based on Google SRE best practices and industry standards
+
+groups:
+  # =============================================================================
+  # SLO-based Alerts (Service Level Objectives)
+  # =============================================================================
+
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # Error Budget Alerts
+      - alert: ErrorBudgetBurnRateFast
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "Fast error budget burn rate on {{ $labels.service }}"
+          description: "Service {{ $labels.service }} is experiencing high error rate ({{ $value | humanizePercentage }}), burning through error budget quickly. SLO target: 99.9% (0.1% error budget)"
+
+      - alert: ErrorBudgetBurnRateSlow
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h])) by (service)
+            /
+            sum(rate(http_requests_total[1h])) by (service)
+          ) > 0.01
+        for: 1h
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "Slow error budget burn rate on {{ $labels.service }}"
+          description: "Service {{ $labels.service }} has elevated error rate ({{ $value | humanizePercentage }}) over the past hour"
+
+      # Latency SLO Alerts
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "High P95 latency on {{ $labels.service }}"
+          description: "P95 latency for {{ $labels.service }} is {{ $value }}s (target: <1s)"
+
+      - alert: HighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 2.0
+        for: 10m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "Critical P99 latency on {{ $labels.service }}"
+          description: "P99 latency for {{ $labels.service }} is {{ $value }}s (target: <2s)"
+
+      # Availability SLO
+      - alert: LowAvailability
+        expr: |
+          (
+            sum(rate(http_requests_total{status!~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "Low availability on {{ $labels.service }}"
+          description: "Availability for {{ $labels.service }} is {{ $value | humanizePercentage }} (target: 99.9%)"
+
+  # =============================================================================
+  # Service Health Alerts
+  # =============================================================================
+
+  - name: service_health
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          category: errors
+        annotations:
+          summary: "High HTTP 5xx error rate on {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.service }}"
+
+      - alert: High4xxRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"4.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High HTTP 4xx error rate on {{ $labels.service }}"
+          description: "Client error rate is {{ $value | humanizePercentage }} on {{ $labels.service }}"
+
+  # =============================================================================
+  # Resource Alerts
+  # =============================================================================
+
+  - name: resource_alerts
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{pod=~".*-service.*"}
+            /
+            container_spec_memory_limit_bytes{pod=~".*-service.*"}
+          ) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage on {{ $labels.pod }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.pod }}"
+
+      - alert: HighCPUUsage
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{pod=~".*-service.*"}[5m])
+            /
+            container_spec_cpu_quota{pod=~".*-service.*"}
+          ) * 100000 > 90
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.pod }}"
+          description: "CPU usage is {{ $value }}% on {{ $labels.pod }}"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: stability
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+
+      - alert: PodNotReady
+        expr: kube_pod_status_phase{phase!~"Running|Succeeded"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          category: stability
+        annotations:
+          summary: "Pod {{ $labels.pod }} not ready"
+          description: "Pod {{ $labels.pod }} has been in {{ $labels.phase }} state for more than 10 minutes"
+
+      - alert: ContainerOOMKilled
+        expr: increase(kube_pod_container_status_terminated_reason{reason="OOMKilled"}[5m]) > 0
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Container OOMKilled in pod {{ $labels.pod }}"
+          description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was OOMKilled. Increase memory limits."
+
+  # =============================================================================
+  # Database Alerts
+  # =============================================================================
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database is down"
+          description: "PostgreSQL database on {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: DatabaseHighConnectionCount
+        expr: |
+          (
+            sum(pg_stat_database_numbackends) by (instance)
+            /
+            pg_settings_max_connections
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High database connection count"
+          description: "Database connection usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: DatabaseSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration[5m]) > 60
+        for: 10m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query duration is {{ $value }}s on {{ $labels.instance }}"
+
+      - alert: DatabaseReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High database replication lag"
+          description: "Replication lag is {{ $value }}s on {{ $labels.instance }}"
+
+  # =============================================================================
+  # Message Queue Alerts
+  # =============================================================================
+
+  - name: messagequeue_alerts
+    interval: 30s
+    rules:
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: messagequeue
+        annotations:
+          summary: "RabbitMQ is down"
+          description: "RabbitMQ on {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: RabbitMQHighQueueDepth
+        expr: rabbitmq_queue_messages > 10000
+        for: 10m
+        labels:
+          severity: warning
+          category: messagequeue
+        annotations:
+          summary: "High RabbitMQ queue depth"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages"
+
+      - alert: RabbitMQNoConsumers
+        expr: rabbitmq_queue_consumers == 0 and rabbitmq_queue_messages > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: messagequeue
+        annotations:
+          summary: "RabbitMQ queue has no consumers"
+          description: "Queue {{ $labels.queue }} has messages but no consumers"
+
+  # =============================================================================
+  # Cache Alerts (Redis)
+  # =============================================================================
+
+  - name: cache_alerts
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis on {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "High Redis eviction rate"
+          description: "Redis is evicting {{ $value }} keys/s on {{ $labels.instance }}"
+
+  # =============================================================================
+  # Kubernetes Cluster Alerts
+  # =============================================================================
+
+  - name: kubernetes_alerts
+    interval: 30s
+    rules:
+      - alert: KubernetesNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: kubernetes
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} not ready"
+          description: "Node {{ $labels.node }} has been unready for more than 5 minutes"
+
+      - alert: KubernetesNodeMemoryPressure
+        expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} under memory pressure"
+          description: "Node {{ $labels.node }} is experiencing memory pressure"
+
+      - alert: KubernetesNodeDiskPressure
+        expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} under disk pressure"
+          description: "Node {{ $labels.node }} is experiencing disk pressure"
+
+      - alert: KubernetesPersistentVolumeClaimPending
+        expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "PVC {{ $labels.persistentvolumeclaim }} pending"
+          description: "PVC {{ $labels.persistentvolumeclaim }} has been pending for more than 10 minutes"
+
+  # =============================================================================
+  # Application-Specific Alerts
+  # =============================================================================
+
+  - name: application_alerts
+    interval: 30s
+    rules:
+      - alert: OrderProcessingDelayed
+        expr: order_processing_duration_seconds > 30
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Order processing is delayed"
+          description: "Average order processing time is {{ $value }}s (target: <30s)"
+
+      - alert: ShipmentCreationFailed
+        expr: rate(shipment_creation_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "Shipment creation failures"
+          description: "Shipment creation error rate is {{ $value | humanizePercentage }}"
+
+      - alert: InventoryLowStock
+        expr: inventory_quantity < inventory_threshold
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Low inventory for {{ $labels.product }}"
+          description: "Inventory for {{ $labels.product }} is {{ $value }} units (threshold: {{ $labels.threshold }})"
+
+      - alert: NotificationDeliveryFailed
+        expr: rate(notification_delivery_errors_total[5m]) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Notification delivery failures"
+          description: "Notification delivery error rate is {{ $value | humanizePercentage }}"
+
+  # =============================================================================
+  # Security Alerts
+  # =============================================================================
+
+  - name: security_alerts
+    interval: 30s
+    rules:
+      - alert: TooManyAuthenticationFailures
+        expr: rate(http_requests_total{status="401"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} req/s on {{ $labels.service }}"
+
+      - alert: SuspiciousTraffic
+        expr: rate(http_requests_total{status="403"}[5m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High rate of forbidden requests"
+          description: "Forbidden request rate is {{ $value }} req/s on {{ $labels.service }}"
+
+      - alert: RateLimitExceeded
+        expr: rate(http_requests_total{status="429"}[5m]) > 20
+        for: 5m
+        labels:
+          severity: info
+          category: security
+        annotations:
+          summary: "High rate of rate-limited requests"
+          description: "Rate limit exceeded {{ $value }} times/s on {{ $labels.service }}"

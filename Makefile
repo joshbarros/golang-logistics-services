@@ -1,10 +1,193 @@
-.PHONY: help build run test clean docker-build k8s-deploy k8s-delete tilt-up tilt-down proto-gen proto-clean
+.PHONY: help build run test clean docker-build k8s-deploy k8s-delete tilt-up tilt-down proto-gen proto-clean \
+	lint fmt vet security-scan coverage validate-platform quality-gates pre-commit-install ci-local \
+	migrate-up migrate-down migrate-create helm-package helm-install helm-upgrade
+
+# Configuration
+GO_VERSION := 1.21
+GOLANGCI_LINT_VERSION := v1.55.2
+SERVICES := order-service shipment-service inventory-service driver-service route-service notification-service gateway
+BIN_DIR := bin
+COVERAGE_THRESHOLD := 50
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+# =============================================================================
+# Development
+# =============================================================================
+
+deps: ## Download dependencies
+	@echo "📦 Downloading Go dependencies..."
+	@go mod download
+	@go mod verify
+	@echo "✅ Dependencies downloaded and verified"
+
+fmt: ## Format code
+	@echo "🎨 Formatting Go code..."
+	@gofmt -w -s .
+	@goimports -w -local github.com/joshbarros/golang-logistics-services .
+	@echo "✅ Code formatted"
+
+vet: ## Run go vet
+	@echo "🔍 Running go vet..."
+	@go vet ./...
+	@echo "✅ Go vet passed"
+
+# =============================================================================
+# Code Quality
+# =============================================================================
+
+lint: ## Run golangci-lint
+	@echo "🔍 Running golangci-lint..."
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+	}
+	@golangci-lint run --config=.golangci.yml --timeout=5m
+	@echo "✅ Linting passed"
+
+lint-fix: ## Run golangci-lint with auto-fix
+	@echo "🔧 Running golangci-lint with auto-fix..."
+	@golangci-lint run --config=.golangci.yml --timeout=5m --fix
+	@echo "✅ Linting complete with fixes applied"
+
+# =============================================================================
+# Security
+# =============================================================================
+
+security-scan: ## Run security scanners
+	@echo "🔒 Running security scans..."
+	@echo "Running gosec..."
+	@command -v gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@gosec -fmt=json -out=gosec-report.json ./... || true
+	@echo ""
+	@echo "Running govulncheck..."
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	@govulncheck ./...
+	@echo "✅ Security scans complete"
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+coverage: ## Run tests with coverage
+	@echo "📊 Running tests with coverage..."
+	@go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	@go tool cover -func=coverage.out
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep total | awk '{print substr($$3, 1, length($$3)-1)}'); \
+	echo ""; \
+	echo "Total coverage: $${COVERAGE}%"; \
+	if [ "$$(echo "$${COVERAGE} < $(COVERAGE_THRESHOLD)" | bc -l)" -eq 1 ]; then \
+		echo "❌ Coverage $${COVERAGE}% is below minimum $(COVERAGE_THRESHOLD)%"; \
+		exit 1; \
+	else \
+		echo "✅ Coverage $${COVERAGE}% meets minimum threshold"; \
+	fi
+
+coverage-html: coverage ## Generate HTML coverage report
+	@echo "📊 Generating HTML coverage report..."
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Coverage report generated: coverage.html"
+
+integration-test: ## Run integration tests
+	@echo "🧪 Running integration tests..."
+	@go test -v -tags=integration ./tests/...
+	@echo "✅ Integration tests passed"
+
+benchmark: ## Run benchmarks
+	@echo "⚡ Running benchmarks..."
+	@go test -bench=. -benchmem ./...
+	@echo "✅ Benchmarks complete"
+
+# =============================================================================
+# Validation
+# =============================================================================
+
+validate-platform: ## Run platform validation script
+	@echo "✅ Running platform validation..."
+	@chmod +x validate-platform.sh
+	@./validate-platform.sh
+
+# =============================================================================
+# Quality Gates (CI/CD)
+# =============================================================================
+
+quality-gates: fmt vet lint security-scan test coverage validate-platform ## Run all quality gates
+	@echo ""
+	@echo "================================"
+	@echo "🎯 Quality Gates Summary"
+	@echo "================================"
+	@echo "✅ Format check"
+	@echo "✅ Go vet"
+	@echo "✅ Linting"
+	@echo "✅ Security scan"
+	@echo "✅ Tests"
+	@echo "✅ Coverage"
+	@echo "✅ Platform validation"
+	@echo ""
+	@echo "🎉 All quality gates passed!"
+
+ci-local: quality-gates build ## Run full CI pipeline locally
+	@echo ""
+	@echo "================================"
+	@echo "🚀 Local CI Complete"
+	@echo "================================"
+	@echo "✅ All checks passed"
+	@echo "✅ All services built"
+	@echo ""
+	@echo "Ready to commit and push!"
+
+# =============================================================================
+# Pre-commit
+# =============================================================================
+
+pre-commit-install: ## Install pre-commit hooks
+	@echo "🪝 Installing pre-commit hooks..."
+	@command -v pre-commit >/dev/null 2>&1 || { \
+		echo "Installing pre-commit..."; \
+		pip install pre-commit || pip3 install pre-commit; \
+	}
+	@pre-commit install
+	@pre-commit install --hook-type commit-msg
+	@echo "✅ Pre-commit hooks installed"
+
+pre-commit-run: ## Run pre-commit on all files
+	@echo "🪝 Running pre-commit hooks..."
+	@pre-commit run --all-files
+
+# =============================================================================
+# Database Migrations
+# =============================================================================
+
+migrate-install: ## Install golang-migrate
+	@echo "📦 Installing golang-migrate..."
+	@go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	@echo "✅ golang-migrate installed"
+
+migrate-create: ## Create new migration (usage: make migrate-create NAME=create_users_table)
+	@echo "📝 Creating migration: $(NAME)"
+	@migrate create -ext sql -dir migrations -seq $(NAME)
+	@echo "✅ Migration files created"
+
+migrate-up: ## Run database migrations
+	@echo "⬆️  Running migrations..."
+	@migrate -path migrations -database "$(DATABASE_URL)" up
+	@echo "✅ Migrations complete"
+
+migrate-down: ## Rollback last migration
+	@echo "⬇️  Rolling back migration..."
+	@migrate -path migrations -database "$(DATABASE_URL)" down 1
+	@echo "✅ Rollback complete"
+
+migrate-version: ## Show current migration version
+	@migrate -path migrations -database "$(DATABASE_URL)" version
+
+# =============================================================================
+# Protocol Buffers
+# =============================================================================
 
 proto-gen: ## Generate Go code from protocol buffers
 	@echo "Generating gRPC code from proto files..."

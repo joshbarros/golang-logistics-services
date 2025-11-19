@@ -1,0 +1,229 @@
+# Pre-commit hooks configuration
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # =============================================================================
+  # General file checks
+  # =============================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        args: [--markdown-linebreak-ext=md]
+
+      - id: end-of-file-fixer
+        name: Fix end of files
+        exclude: '\.svg$'
+
+      - id: check-yaml
+        name: Check YAML syntax
+        args: [--allow-multiple-documents]
+
+      - id: check-json
+        name: Check JSON syntax
+
+      - id: check-toml
+        name: Check TOML syntax
+
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1000]
+
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+
+      - id: check-case-conflict
+        name: Check for case conflicts
+
+      - id: mixed-line-ending
+        name: Check line endings
+        args: [--fix=lf]
+
+      - id: detect-private-key
+        name: Detect private keys
+
+      - id: forbid-submodules
+        name: Forbid submodules
+
+  # =============================================================================
+  # Go-specific checks
+  # =============================================================================
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        name: Go format
+        args: [-w]
+
+      - id: go-imports
+        name: Go imports
+        args: [-w, -local, github.com/joshbarros/golang-logistics-services]
+
+      - id: go-vet
+        name: Go vet
+
+      - id: go-mod-tidy
+        name: Go mod tidy
+
+      - id: go-build
+        name: Go build
+        args: [-o, /dev/null, ./...]
+
+      - id: go-test
+        name: Go test (fast)
+        args: [-short, ./...]
+
+      - id: go-cyclo
+        name: Check cyclomatic complexity
+        args: [-over, '15']
+
+      - id: go-unit-tests
+        name: Go unit tests
+        args: [-timeout, 30s, -short, -race, ./...]
+
+  # =============================================================================
+  # golangci-lint (comprehensive linting)
+  # =============================================================================
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        args:
+          - --config=.golangci.yml
+          - --timeout=5m
+          - --new-from-rev=HEAD~1  # Only check new/changed code
+
+  # =============================================================================
+  # Security checks
+  # =============================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: (go.sum|\.lock$)
+
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.63.0
+    hooks:
+      - id: trufflehog
+        name: TruffleHog (secret scanner)
+        args:
+          - --regex
+          - --entropy=True
+          - --max_depth=2
+        exclude: (go.sum|\.lock$)
+
+  # =============================================================================
+  # Docker checks
+  # =============================================================================
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: Lint Dockerfiles
+        args: [--ignore, DL3018]  # Ignore Alpine pinning warning
+
+  # =============================================================================
+  # Kubernetes manifest checks
+  # =============================================================================
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.4
+    hooks:
+      - id: insert-license
+        name: Insert license header
+        files: \.go$
+        args:
+          - --license-filepath
+          - LICENSE-HEADER.txt
+          - --comment-style
+          - //
+
+  # =============================================================================
+  # Markdown checks
+  # =============================================================================
+  - repo: https://github.com/markdownlint/markdownlint
+    rev: v0.12.0
+    hooks:
+      - id: markdownlint
+        name: Lint Markdown files
+        args: [--rules, '~MD013,~MD033']  # Disable line length and inline HTML rules
+
+  # =============================================================================
+  # Commit message checks
+  # =============================================================================
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        name: Check commit message format
+        stages: [commit-msg]
+
+  # =============================================================================
+  # Custom local hooks
+  # =============================================================================
+  - repo: local
+    hooks:
+      - id: no-println
+        name: Check for fmt.Println (use logger instead)
+        entry: 'fmt\.Println'
+        language: pygrep
+        files: \.go$
+        exclude: (_test\.go$|main\.go$)
+
+      - id: no-commit-to-main
+        name: Prevent direct commits to main
+        entry: bash -c 'if [ "$PRE_COMMIT_FROM_REF" = "refs/heads/main" ]; then echo "Direct commits to main are not allowed"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: validate-service-structure
+        name: Validate service structure
+        entry: bash -c 'for svc in services/*/; do test -f "$svc/cmd/main.go" || test -f "$svc/main.go" || (echo "Service $svc missing main.go" && exit 1); done'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-test-coverage
+        name: Check minimum test coverage (50%)
+        entry: bash -c 'COVERAGE=$(go test -coverprofile=/tmp/coverage.out ./... 2>/dev/null && go tool cover -func=/tmp/coverage.out | grep total | awk "{print \$3}" | sed "s/%//"); if (( $(echo "$COVERAGE < 50" | bc -l 2>/dev/null || echo 0) )); then echo "Coverage $COVERAGE% below minimum 50%"; exit 1; fi; echo "Coverage: $COVERAGE%"'
+        language: system
+        pass_filenames: false
+
+      - id: check-go-mod
+        name: Verify go.mod is up to date
+        entry: bash -c 'go mod tidy && git diff --exit-code go.mod go.sum'
+        language: system
+        pass_filenames: false
+
+# =============================================================================
+# Configuration
+# =============================================================================
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+
+default_stages: [commit]
+
+fail_fast: false  # Run all hooks even if one fails
+
+minimum_pre_commit_version: '2.20.0'
+
+# =============================================================================
+# CI configuration
+# =============================================================================
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [go-build, go-test, go-unit-tests, check-test-coverage]  # Skip slow tests in CI
+  submodules: false
